@@ -1,0 +1,641 @@
+<html lang="th"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📸 Window Snipper Pro</title>
+<script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+  body { background: linear-gradient(135deg, #667eea, #764ba2); min-height: 100vh; padding: 20px; color: #fff; }
+  .container { max-width: 1400px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 20px; }
+  header h1 { font-size: 2.2em; margin-bottom: 5px; }
+  header p { opacity: 0.9; font-size: 0.95em; }
+
+  .panel { background: rgba(255,255,255,0.97); color: #333; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.15); }
+  .panel h2 { color: #667eea; font-size: 1.15em; margin-bottom: 12px; }
+  .step-num { display: inline-block; background: #667eea; color: #fff; width: 26px; height: 26px; border-radius: 50%; text-align: center; line-height: 26px; font-size: 0.85em; margin-right: 8px; }
+
+  .ratio-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .ratio-btn { padding: 12px 20px; border: 2px solid #e0e0e0; border-radius: 8px; background: #fff; cursor: pointer; font-weight: 600; transition: 0.2s; }
+  .ratio-btn:hover { border-color: #667eea; transform: translateY(-2px); }
+  .ratio-btn.active { background: #667eea; color: #fff; border-color: #667eea; }
+
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .btn { padding: 12px 20px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; font-size: 0.95em; }
+  .btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; }
+  .btn-success { background: #10b981; color: #fff; }
+  .btn-danger { background: #ef4444; color: #fff; }
+  .btn-warning { background: #f59e0b; color: #fff; }
+  .btn-light { background: #f3f4f6; color: #555; }
+
+  .status { padding: 10px 14px; border-radius: 8px; font-weight: 600; font-size: 0.9em; margin-bottom: 12px; }
+  .status.idle { background: #f3f4f6; color: #6b7280; }
+  .status.active { background: #d1fae5; color: #065f46; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.7; } }
+
+  .preview-wrap { position: relative; background: #000; border-radius: 8px; overflow: hidden; max-width: 100%; user-select: none; }
+  #preview { display: block; width: 100%; max-height: 60vh; object-fit: contain; }
+
+  #cropFrame {
+    position: absolute; border: 2px dashed #fff;
+    box-shadow: 0 0 0 9999px rgba(0,0,0,0.45);
+    cursor: move; box-sizing: border-box;
+  }
+  #cropFrame::before {
+    content: ''; position: absolute; inset: 0;
+    border: 1px solid rgba(255,255,255,0.5);
+  }
+  .handle {
+    position: absolute; width: 14px; height: 14px;
+    background: #10b981; border: 2px solid #fff;
+    border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  }
+  .handle.nw { top: -7px; left: -7px; cursor: nwse-resize; }
+  .handle.ne { top: -7px; right: -7px; cursor: nesw-resize; }
+  .handle.sw { bottom: -7px; left: -7px; cursor: nesw-resize; }
+  .handle.se { bottom: -7px; right: -7px; cursor: nwse-resize; }
+  .ratio-label {
+    position: absolute; top: 8px; left: 8px;
+    background: rgba(16,185,129,0.9); color: #fff;
+    padding: 3px 10px; border-radius: 4px;
+    font-size: 0.8em; font-weight: 700;
+  }
+
+  .slides-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; max-height: 400px; overflow-y: auto; padding: 4px; }
+  .slide-card { background: #fff; border-radius: 8px; overflow: hidden; border: 2px solid #e0e0e0; transition: 0.2s; position: relative; }
+  .slide-card:hover { transform: translateY(-2px); border-color: #667eea; }
+  .slide-card img { width: 100%; display: block; }
+  .slide-info { padding: 6px 10px; display: flex; justify-content: space-between; align-items: center; font-size: 0.78em; color: #666; }
+  .slide-del { background: #ef4444; color: #fff; border: none; width: 22px; height: 22px; border-radius: 50%; cursor: pointer; font-size: 0.75em; }
+
+  .empty-state { text-align: center; padding: 40px 20px; color: #9ca3af; }
+  .empty-state .icon { font-size: 3em; margin-bottom: 10px; }
+
+  .toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px); background: #1f2937; color: #fff; padding: 12px 20px; border-radius: 8px; box-shadow: 0 8px 25px rgba(0,0,0,0.3); opacity: 0; transition: 0.3s; z-index: 9999; }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+  .info-box { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 10px 14px; border-radius: 6px; font-size: 0.85em; color: #1e40af; margin-top: 12px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>📸 Window Snipper Pro</h1>
+    <p>Capture window แบบเลือกพื้นที่ได้ → Export PowerPoint</p>
+  </header>
+
+  <!-- STEP 1: Choose Ratio -->
+  <div class="panel">
+    <h2><span class="step-num">1</span>📐 เลือก Ratio</h2>
+    <div class="ratio-row">
+      <button class="ratio-btn active" data-w="16" data-h="9">16:9 (Widescreen)</button>
+      <button class="ratio-btn" data-w="1" data-h="1">1:1 (Square)</button>
+      <button class="ratio-btn" data-w="4" data-h="5">4:5 (Portrait)</button>
+      <button class="ratio-btn" data-w="0" data-h="0">📺 Full Window</button>
+    </div>
+  </div>
+
+  <!-- STEP 2: Session Control -->
+  <div class="panel">
+    <h2><span class="step-num">2</span>🎬 Session Control</h2>
+    <div id="status" class="status idle">⏸️ ยังไม่ได้เริ่ม session</div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="startBtn">▶️ Start Session (เลือก Window)</button>
+      <button class="btn btn-warning hidden" id="switchBtn">🔄 Switch Window</button>
+      <button class="btn btn-danger hidden" id="stopBtn">⏹️ Stop Session</button>
+    </div>
+    <div class="info-box">
+      💡 ตอนกด Start จะให้เลือก <strong>"Window"</strong> → เลือกโปรแกรมที่ต้องการ capture
+      <br>หลัง start แล้ว ใช้โปรแกรมนั้นปกติได้เลย — capture จะตามไปทุกหน้าที่อยู่ใน window นั้น
+    </div>
+  </div>
+
+  <!-- STEP 3: Preview & Crop -->
+  <div class="panel hidden" id="previewPanel">
+    <h2><span class="step-num">3</span>✂️ ลากตำแหน่ง + ขนาดที่ต้องการ Capture</h2>
+    <div class="preview-wrap" id="previewWrap">
+      <video id="preview" autoplay="" muted=""></video>
+      <div id="cropFrame">
+        <div class="ratio-label" id="ratioLabel">16:9</div>
+        <div class="handle nw" data-pos="nw"></div>
+        <div class="handle ne" data-pos="ne"></div>
+        <div class="handle sw" data-pos="sw"></div>
+        <div class="handle se" data-pos="se"></div>
+      </div>
+    </div>
+    <div class="btn-row" style="margin-top: 14px;">
+      <button class="btn btn-success" id="captureBtn">📸 Capture (F5)</button>
+      <button class="btn btn-light" id="centerBtn">🎯 Center Frame</button>
+      <button class="btn btn-light" id="maxBtn">📏 Max Size</button>
+      <button class="btn btn-warning" id="pipBtn">🪟 เปิดปุ่มลอย (F5 ใช้ได้)</button>
+    </div>
+    <div class="info-box">
+      🪟 <strong>"เปิดปุ่มลอย"</strong> = เปิดหน้าต่างเล็กลอยบนสุด → กด capture ได้ทันทีโดยไม่ต้องกลับมา tab นี้
+    </div>
+  </div>
+
+  <!-- STEP 4: Slides -->
+  <div class="panel">
+    <h2><span class="step-num">4</span>🎞️ Slides ที่เก็บไว้ (<span id="count">0</span>)</h2>
+    <div id="slidesContainer">
+      <div class="empty-state">
+        <div class="icon">📷</div>
+        <p>ยังไม่มี slide — กด Start Session แล้วเริ่ม capture ได้เลย</p>
+      </div>
+    </div>
+    <div class="btn-row" style="margin-top: 12px;">
+      <button class="btn btn-success" id="exportBtn" disabled="">📥 Export PowerPoint</button>
+      <button class="btn btn-light" id="clearBtn">🗑️ Clear All</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════════════
+const state = {
+  ratio: { w: 16, h: 9, free: false },
+  stream: null,
+  video: null,
+  slides: [],
+  crop: { x: 0, y: 0, w: 0, h: 0 }, // CSS pixels relative to video element
+  pipWindow: null,
+};
+
+const $ = (id) => document.getElementById(id);
+const els = {
+  status: $('status'),
+  startBtn: $('startBtn'),
+  switchBtn: $('switchBtn'),
+  stopBtn: $('stopBtn'),
+  previewPanel: $('previewPanel'),
+  previewWrap: $('previewWrap'),
+  preview: $('preview'),
+  cropFrame: $('cropFrame'),
+  ratioLabel: $('ratioLabel'),
+  captureBtn: $('captureBtn'),
+  centerBtn: $('centerBtn'),
+  maxBtn: $('maxBtn'),
+  pipBtn: $('pipBtn'),
+  count: $('count'),
+  slidesContainer: $('slidesContainer'),
+  exportBtn: $('exportBtn'),
+  clearBtn: $('clearBtn'),
+  toast: $('toast'),
+};
+
+// ════════════════════════════════════════════════════════════
+// UTIL
+// ════════════════════════════════════════════════════════════
+function toast(msg, ms = 1800) {
+  els.toast.textContent = msg;
+  els.toast.classList.add('show');
+  setTimeout(() => els.toast.classList.remove('show'), ms);
+}
+
+// ════════════════════════════════════════════════════════════
+// RATIO SELECTION
+// ════════════════════════════════════════════════════════════
+document.querySelectorAll('.ratio-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.ratio-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const w = parseFloat(btn.dataset.w);
+    const h = parseFloat(btn.dataset.h);
+    state.ratio = { w, h, free: (w === 0) };
+    if (state.stream) {
+      initCropFrame();
+      els.ratioLabel.textContent = state.ratio.free ? 'Full' : `${w}:${h}`;
+    }
+    toast(`📐 Ratio: ${state.ratio.free ? 'Full Window' : w + ':' + h}`);
+  });
+});
+
+// ════════════════════════════════════════════════════════════
+// SESSION: Start / Switch / Stop
+// ════════════════════════════════════════════════════════════
+async function startStream() {
+  // ขอ stream → user เลือก Window/Tab/Screen
+  const stream = await navigator.mediaDevices.getDisplayMedia({
+    video: { cursor: 'always', frameRate: 30 },
+    audio: false,
+  });
+  // listen เมื่อ user หยุดแชร์เอง
+  stream.getVideoTracks()[0].addEventListener('ended', stopSession);
+  return stream;
+}
+
+els.startBtn.addEventListener('click', async () => {
+  try {
+    const stream = await startStream();
+    state.stream = stream;
+    els.preview.srcObject = stream;
+    await els.preview.play();
+
+    // รอ video metadata โหลด
+    await new Promise(r => {
+      if (els.preview.videoWidth) r();
+      else els.preview.addEventListener('loadedmetadata', r, { once: true });
+    });
+
+    initCropFrame();
+
+    els.previewPanel.classList.remove('hidden');
+    els.startBtn.classList.add('hidden');
+    els.switchBtn.classList.remove('hidden');
+    els.stopBtn.classList.remove('hidden');
+    els.status.textContent = '🟢 Session ACTIVE - กด F5 หรือคลิก 📸 Capture';
+    els.status.className = 'status active';
+    toast('✅ Session started!', 2000);
+  } catch (err) {
+    toast('❌ ' + err.message, 3000);
+  }
+});
+
+els.switchBtn.addEventListener('click', async () => {
+  try {
+    // หยุด stream เก่า
+    if (state.stream) state.stream.getTracks().forEach(t => t.stop());
+    // เริ่ม stream ใหม่
+    const stream = await startStream();
+    state.stream = stream;
+    els.preview.srcObject = stream;
+    await els.preview.play();
+    await new Promise(r => {
+      if (els.preview.videoWidth) r();
+      else els.preview.addEventListener('loadedmetadata', r, { once: true });
+    });
+    initCropFrame();
+    toast('🔄 Switched window!', 1800);
+  } catch (err) {
+    toast('❌ ' + err.message, 3000);
+  }
+});
+
+function stopSession() {
+  if (state.stream) {
+    state.stream.getTracks().forEach(t => t.stop());
+    state.stream = null;
+  }
+  els.preview.srcObject = null;
+  els.previewPanel.classList.add('hidden');
+  els.startBtn.classList.remove('hidden');
+  els.switchBtn.classList.add('hidden');
+  els.stopBtn.classList.add('hidden');
+  els.status.textContent = '⏸️ Session stopped';
+  els.status.className = 'status idle';
+  if (state.pipWindow) {
+    try { state.pipWindow.close(); } catch(e) {}
+    state.pipWindow = null;
+  }
+}
+els.stopBtn.addEventListener('click', stopSession);
+
+// ════════════════════════════════════════════════════════════
+// CROP FRAME: Init / Drag / Resize
+// ════════════════════════════════════════════════════════════
+function getPreviewBox() {
+  // Effective video display area inside <video>
+  const wrap = els.preview.getBoundingClientRect();
+  const vW = els.preview.videoWidth, vH = els.preview.videoHeight;
+  if (!vW || !vH) return { left: 0, top: 0, width: wrap.width, height: wrap.height };
+  // object-fit: contain → letterbox
+  const scale = Math.min(wrap.width / vW, wrap.height / vH);
+  const dispW = vW * scale, dispH = vH * scale;
+  const left = (wrap.width - dispW) / 2;
+  const top = (wrap.height - dispH) / 2;
+  return { left, top, width: dispW, height: dispH };
+}
+
+function initCropFrame() {
+  const box = getPreviewBox();
+  if (state.ratio.free) {
+    state.crop = { x: box.left, y: box.top, w: box.width, h: box.height };
+  } else {
+    const ratio = state.ratio.w / state.ratio.h;
+    let w = box.width * 0.7;
+    let h = w / ratio;
+    if (h > box.height * 0.9) { h = box.height * 0.9; w = h * ratio; }
+    state.crop = {
+      x: box.left + (box.width - w) / 2,
+      y: box.top + (box.height - h) / 2,
+      w, h,
+    };
+  }
+  els.ratioLabel.textContent = state.ratio.free ? 'Full' : `${state.ratio.w}:${state.ratio.h}`;
+  updateFrame();
+}
+
+function updateFrame() {
+  els.cropFrame.style.left = state.crop.x + 'px';
+  els.cropFrame.style.top = state.crop.y + 'px';
+  els.cropFrame.style.width = state.crop.w + 'px';
+  els.cropFrame.style.height = state.crop.h + 'px';
+}
+
+function clampToPreview() {
+  const box = getPreviewBox();
+  if (state.crop.w > box.width) state.crop.w = box.width;
+  if (state.crop.h > box.height) state.crop.h = box.height;
+  if (state.crop.x < box.left) state.crop.x = box.left;
+  if (state.crop.y < box.top) state.crop.y = box.top;
+  if (state.crop.x + state.crop.w > box.left + box.width) state.crop.x = box.left + box.width - state.crop.w;
+  if (state.crop.y + state.crop.h > box.top + box.height) state.crop.y = box.top + box.height - state.crop.h;
+}
+
+// ── Drag (move) ──
+let dragMode = null;
+let dragStart = null;
+
+els.cropFrame.addEventListener('mousedown', (e) => {
+  if (e.target.classList.contains('handle')) return;
+  e.preventDefault();
+  dragMode = 'move';
+  const wrapRect = els.previewWrap.getBoundingClientRect();
+  dragStart = {
+    mx: e.clientX, my: e.clientY,
+    cx: state.crop.x, cy: state.crop.y,
+    wrapLeft: wrapRect.left, wrapTop: wrapRect.top,
+  };
+});
+
+document.querySelectorAll('.handle').forEach(h => {
+  h.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragMode = 'resize-' + h.dataset.pos;
+    dragStart = {
+      mx: e.clientX, my: e.clientY,
+      cx: state.crop.x, cy: state.crop.y,
+      cw: state.crop.w, ch: state.crop.h,
+    };
+  });
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!dragMode || !dragStart) return;
+  const dx = e.clientX - dragStart.mx;
+  const dy = e.clientY - dragStart.my;
+
+  if (dragMode === 'move') {
+    state.crop.x = dragStart.cx + dx;
+    state.crop.y = dragStart.cy + dy;
+  } else {
+    const ratio = state.ratio.free ? (dragStart.cw / dragStart.ch) : (state.ratio.w / state.ratio.h);
+    const pos = dragMode.split('-')[1];
+    let newW = dragStart.cw, newH = dragStart.ch;
+    let newX = dragStart.cx, newY = dragStart.cy;
+
+    if (pos === 'se') {
+      newW = dragStart.cw + dx;
+      if (!state.ratio.free) newH = newW / ratio;
+      else newH = dragStart.ch + dy;
+    } else if (pos === 'sw') {
+      newW = dragStart.cw - dx;
+      if (!state.ratio.free) newH = newW / ratio;
+      else newH = dragStart.ch + dy;
+      newX = dragStart.cx + (dragStart.cw - newW);
+    } else if (pos === 'ne') {
+      newW = dragStart.cw + dx;
+      if (!state.ratio.free) newH = newW / ratio;
+      else newH = dragStart.ch - dy;
+      newY = dragStart.cy + (dragStart.ch - newH);
+    } else if (pos === 'nw') {
+      newW = dragStart.cw - dx;
+      if (!state.ratio.free) newH = newW / ratio;
+      else newH = dragStart.ch - dy;
+      newX = dragStart.cx + (dragStart.cw - newW);
+      newY = dragStart.cy + (dragStart.ch - newH);
+    }
+    if (newW < 50 || newH < 50) return;
+    state.crop.w = newW;
+    state.crop.h = newH;
+    state.crop.x = newX;
+    state.crop.y = newY;
+  }
+  clampToPreview();
+  updateFrame();
+});
+
+document.addEventListener('mouseup', () => {
+  dragMode = null;
+  dragStart = null;
+});
+
+// Helper buttons
+els.centerBtn.addEventListener('click', () => { initCropFrame(); toast('🎯 Centered'); });
+els.maxBtn.addEventListener('click', () => {
+  const box = getPreviewBox();
+  if (state.ratio.free) {
+    state.crop = { x: box.left, y: box.top, w: box.width, h: box.height };
+  } else {
+    const ratio = state.ratio.w / state.ratio.h;
+    let w = box.width, h = w / ratio;
+    if (h > box.height) { h = box.height; w = h * ratio; }
+    state.crop = { x: box.left + (box.width - w)/2, y: box.top + (box.height - h)/2, w, h };
+  }
+  updateFrame();
+  toast('📏 Max size');
+});
+
+// Re-init on resize
+window.addEventListener('resize', () => { if (state.stream) updateFrame(); });
+
+// ════════════════════════════════════════════════════════════
+// CAPTURE (heart of the system)
+// ════════════════════════════════════════════════════════════
+function capture() {
+  if (!state.stream || !els.preview.videoWidth) {
+    toast('⚠️ Start session ก่อน');
+    return;
+  }
+  const vW = els.preview.videoWidth;
+  const vH = els.preview.videoHeight;
+  const box = getPreviewBox();
+
+  // CSS coords (within preview wrap) → video pixel coords
+  const scaleX = vW / box.width;
+  const scaleY = vH / box.height;
+  const sx = (state.crop.x - box.left) * scaleX;
+  const sy = (state.crop.y - box.top) * scaleY;
+  const sw = state.crop.w * scaleX;
+  const sh = state.crop.h * scaleY;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(sw);
+  canvas.height = Math.round(sh);
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(els.preview, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+
+  const slide = {
+    id: Date.now() + Math.random(),
+    dataUrl: canvas.toDataURL('image/png'),
+    timestamp: new Date().toLocaleTimeString(),
+    width: canvas.width,
+    height: canvas.height,
+  };
+  state.slides.push(slide);
+  renderSlides();
+  updatePipCount();
+  toast(`📸 Captured #${state.slides.length}`);
+
+  // Flash effect
+  els.cropFrame.style.background = 'rgba(255,255,255,0.4)';
+  setTimeout(() => { els.cropFrame.style.background = ''; }, 100);
+
+  // Beep
+  try {
+    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ac.createOscillator(); const g = ac.createGain();
+    o.connect(g); g.connect(ac.destination);
+    o.frequency.value = 880; g.gain.setValueAtTime(0.1, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.1);
+    o.start(); o.stop(ac.currentTime + 0.1);
+  } catch(e){}
+}
+
+els.captureBtn.addEventListener('click', capture);
+
+// F5 hotkey (override browser refresh)
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'F5' && state.stream) {
+    e.preventDefault();
+    capture();
+  }
+  // Bonus: Space ก็ใช้ได้
+  if (e.code === 'Space' && state.stream && !e.target.matches('input,textarea')) {
+    e.preventDefault();
+    capture();
+  }
+});
+
+// ════════════════════════════════════════════════════════════
+// FLOATING WINDOW (Picture-in-Picture)
+// ════════════════════════════════════════════════════════════
+els.pipBtn.addEventListener('click', async () => {
+  if (!('documentPictureInPicture' in window)) {
+    toast('❌ Browser นี้ไม่รองรับ Floating window — ใช้ Chrome/Edge ล่าสุด', 3500);
+    return;
+  }
+  if (state.pipWindow) {
+    state.pipWindow.focus();
+    return;
+  }
+  try {
+    const pip = await documentPictureInPicture.requestWindow({ width: 260, height: 200 });
+    state.pipWindow = pip;
+    pip.document.head.innerHTML = `<style>
+      body { margin:0; font-family:Segoe UI,sans-serif; background:#1f2937; color:#fff; padding:12px; }
+      h3 { font-size:0.9em; margin-bottom:8px; opacity:0.8; }
+      button { width:100%; padding:18px; font-size:1.1em; font-weight:700;
+               background:#10b981; color:#fff; border:none; border-radius:10px;
+               cursor:pointer; margin-bottom:8px; transition:0.2s; }
+      button:hover { background:#059669; transform:scale(1.02); }
+      button:active { transform:scale(0.98); }
+      .count { text-align:center; font-size:1.5em; font-weight:700; color:#fbbf24; }
+      .label { text-align:center; font-size:0.75em; opacity:0.6; }
+      .hint { font-size:0.7em; opacity:0.5; text-align:center; margin-top:6px; }
+    </style>`;
+    pip.document.body.innerHTML = `
+      <h3>📸 Snipper Floating</h3>
+      <button id="pipCap">📸 CAPTURE (F5)</button>
+      <div class="label">Total slides</div>
+      <div class="count" id="pipCount">0</div>
+      <div class="hint">F5 / Space / Click</div>
+    `;
+    pip.document.getElementById('pipCap').addEventListener('click', capture);
+    pip.document.addEventListener('keydown', (e) => {
+      if (e.key === 'F5' || e.code === 'Space') {
+        e.preventDefault();
+        capture();
+      }
+    });
+    pip.addEventListener('pagehide', () => { state.pipWindow = null; });
+    updatePipCount();
+    toast('🪟 Floating window opened — pin ไว้เลย!', 2500);
+  } catch (err) {
+    toast('❌ ' + err.message, 3000);
+  }
+});
+
+function updatePipCount() {
+  if (state.pipWindow) {
+    const el = state.pipWindow.document.getElementById('pipCount');
+    if (el) el.textContent = state.slides.length;
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// SLIDES RENDER / CLEAR / EXPORT
+// ════════════════════════════════════════════════════════════
+function renderSlides() {
+  els.count.textContent = state.slides.length;
+  els.exportBtn.disabled = state.slides.length === 0;
+  if (state.slides.length === 0) {
+    els.slidesContainer.innerHTML = `<div class="empty-state"><div class="icon">📷</div><p>ยังไม่มี slide</p></div>`;
+    return;
+  }
+  const grid = document.createElement('div');
+  grid.className = 'slides-grid';
+  state.slides.forEach((s, i) => {
+    const card = document.createElement('div');
+    card.className = 'slide-card';
+    card.innerHTML = `
+      <img src="${s.dataUrl}" alt="Slide ${i+1}">
+      <div class="slide-info">
+        <span>#${i+1} • ${s.timestamp}</span>
+        <button class="slide-del">×</button>
+      </div>`;
+    card.querySelector('.slide-del').addEventListener('click', () => {
+      state.slides = state.slides.filter(x => x.id !== s.id);
+      renderSlides();
+      updatePipCount();
+    });
+    grid.appendChild(card);
+  });
+  els.slidesContainer.innerHTML = '';
+  els.slidesContainer.appendChild(grid);
+}
+
+els.clearBtn.addEventListener('click', () => {
+  if (state.slides.length === 0) return;
+  if (confirm(`ลบทั้งหมด ${state.slides.length} slides?`)) {
+    state.slides = [];
+    renderSlides();
+    updatePipCount();
+    toast('🗑️ Cleared');
+  }
+});
+
+els.exportBtn.addEventListener('click', async () => {
+  if (state.slides.length === 0) return;
+  toast('⏳ Exporting...');
+  const pptx = new PptxGenJS();
+  const first = state.slides[0];
+  const r = first.width / first.height;
+  if (Math.abs(r - 16/9) < 0.05) pptx.layout = 'LAYOUT_16x9';
+  else if (Math.abs(r - 4/3) < 0.05) pptx.layout = 'LAYOUT_4x3';
+  else {
+    pptx.defineLayout({ name: 'CUSTOM', width: 10, height: 10/r });
+    pptx.layout = 'CUSTOM';
+  }
+  state.slides.forEach(s => {
+    const slide = pptx.addSlide();
+    slide.background = { color: '000000' };
+    slide.addImage({
+      data: s.dataUrl, x: 0, y: 0, w: '100%', h: '100%',
+      sizing: { type: 'contain', w: '100%', h: '100%' },
+    });
+  });
+  await pptx.writeFile({ fileName: `Snipper_${new Date().toISOString().slice(0,10)}_${Date.now()}.pptx` });
+  toast(`✅ Exported ${state.slides.length} slides!`, 3000);
+});
+</script>
+
+</body></html>
