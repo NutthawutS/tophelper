@@ -571,25 +571,59 @@ els.clearBtn.addEventListener('click', () => {
 });
 
 els.exportBtn.addEventListener('click', async () => {
-  if (state.slides.length === 0) return;
-  toast('⏳ Exporting...');
-  const pptx = new PptxGenJS();
-  const first = state.slides[0];
-  const r = first.width / first.height;
-  if (Math.abs(r - 16/9) < 0.05) pptx.layout = 'LAYOUT_16x9';
-  else if (Math.abs(r - 4/3) < 0.05) pptx.layout = 'LAYOUT_4x3';
-  else {
-    pptx.defineLayout({ name: 'CUSTOM', width: 10, height: 10/r });
-    pptx.layout = 'CUSTOM';
+if (state.slides.length === 0) return;
+toast('⏳ Exporting...');
+
+const pptx = new PptxGenJS();
+
+// ใช้ 16:9 standard layout
+pptx.layout = 'LAYOUT_WIDE'; // 13.333 x 7.5 inches
+const SLIDE_W = 13.333;
+const SLIDE_H = 7.5;
+
+// ─── ตั้งค่าขนาดภาพ ───
+const IMAGE_SCALE = 0.70;  // 70% ของ slide (medium)
+const maxW = SLIDE_W * IMAGE_SCALE;
+const maxH = SLIDE_H * IMAGE_SCALE;
+
+state.slides.forEach((s, i) => {
+  const slide = pptx.addSlide();
+
+  // 🎨 พื้นหลังขาว ดูสะอาด
+  slide.background = { color: 'FFFFFF' };
+
+  // 📐 คำนวณขนาดภาพ (รักษา aspect ratio)
+  const imgRatio = s.width / s.height;
+  let w = maxW;
+  let h = maxW / imgRatio;
+  if (h > maxH) {
+    h = maxH;
+    w = maxH * imgRatio;
   }
-  state.slides.forEach(s => {
-    const slide = pptx.addSlide();
-    slide.background = { color: '000000' };
-    slide.addImage({ data: s.dataUrl, x:0, y:0, w:'100%', h:'100%', sizing: { type:'contain', w:'100%', h:'100%' }});
+
+  // 🎯 จัดกึ่งกลาง slide
+  const x = (SLIDE_W - w) / 2;
+  const y = (SLIDE_H - h) / 2;
+
+  // 🖼️ ใส่ภาพ
+  slide.addImage({
+    data: s.dataUrl,
+    x: x, y: y, w: w, h: h,
   });
-  await pptx.writeFile({ fileName: `Snipper_${new Date().toISOString().slice(0,10)}_${Date.now()}.pptx` });
-  toast(`✅ Exported ${state.slides.length} slides!`, 3000);
+
+  // (Optional) เพิ่มเลข slide มุมล่างขวา
+  slide.addText(`${i + 1} / ${state.slides.length}`, {
+    x: SLIDE_W - 1.2, y: SLIDE_H - 0.4,
+    w: 1, h: 0.3,
+    fontSize: 10, color: '999999',
+    align: 'right',
+  });
 });
-</script>
+
+await pptx.writeFile({
+  fileName: `Snipper_${new Date().toISOString().slice(0,10)}_${Date.now()}.pptx`
+});
+toast(`✅ Exported ${state.slides.length} slides!`, 3000);
+});
 
 </body></html>
