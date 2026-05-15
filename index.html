@@ -37,7 +37,7 @@
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.7; } }
 
   .toolbar { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; padding: 12px; background: #f9fafb; border-radius: 8px; margin-bottom: 12px; }
-  .toolbar-section { display: flex; align-items: center; gap: 8px; }
+  .toolbar-section { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .toolbar-label { font-size: 0.85em; color: #555; font-weight: 600; }
   .divider { width: 1px; height: 28px; background: #d1d5db; }
 
@@ -87,13 +87,12 @@
   </header>
 
   <!-- ════════════════════════════════════════ -->
-  <!-- STEP 1: START SESSION (always visible)  -->
+  <!-- STEP 1: SESSION CONTROL                  -->
   <!-- ════════════════════════════════════════ -->
   <div class="panel">
     <h2><span class="step-num">1</span>🎬 Session Control</h2>
     <div id="status" class="status idle">⏸️ ยังไม่ได้เริ่ม session</div>
 
-    <!-- Idle State (before session) -->
     <div id="idleControls">
       <div class="start-hero">
         <div class="icon">🪟</div>
@@ -103,7 +102,6 @@
       </div>
     </div>
 
-    <!-- Active State (during session) -->
     <div id="activeControls" class="hidden">
       <div class="btn-row">
         <button class="btn btn-warning" id="switchBtn">🔄 Switch Window</button>
@@ -117,12 +115,11 @@
   </div>
 
   <!-- ════════════════════════════════════════ -->
-  <!-- STEP 2: PREVIEW + RATIO + CROP          -->
+  <!-- STEP 2: PREVIEW + RATIO + CROP           -->
   <!-- ════════════════════════════════════════ -->
   <div class="panel hidden" id="workPanel">
     <h2><span class="step-num">2</span>✂️ ปรับ Crop &amp; Capture</h2>
 
-    <!-- Toolbar: Ratio + Tools -->
     <div class="toolbar">
       <div class="toolbar-section">
         <span class="toolbar-label">📐 Ratio:</span>
@@ -139,7 +136,6 @@
       </div>
     </div>
 
-    <!-- Live Preview -->
     <div class="preview-wrap" id="previewWrap">
       <video id="preview" autoplay="" muted=""></video>
       <div id="cropFrame">
@@ -151,7 +147,6 @@
       </div>
     </div>
 
-    <!-- Capture Action -->
     <div class="btn-row" style="margin-top: 14px;">
       <button class="btn btn-success btn-big" id="captureBtn">📸 Capture (F5 / Space)</button>
     </div>
@@ -168,6 +163,17 @@
         <p>ยังไม่มี slide — กด Start Session แล้วเริ่ม capture ได้เลย</p>
       </div>
     </div>
+
+    <div class="toolbar" style="margin-top: 12px;">
+      <div class="toolbar-section">
+        <span class="toolbar-label">📐 Image Size in PPT:</span>
+        <button class="ratio-btn size-btn" data-scale="0.55">🔹 Small</button>
+        <button class="ratio-btn size-btn active" data-scale="0.70">🔸 Medium</button>
+        <button class="ratio-btn size-btn" data-scale="0.85">🔶 Large</button>
+        <button class="ratio-btn size-btn" data-scale="1.0">⬜ Full</button>
+      </div>
+    </div>
+
     <div class="btn-row" style="margin-top: 12px;">
       <button class="btn btn-success" id="exportBtn" disabled="">📥 Export PowerPoint</button>
       <button class="btn btn-light" id="clearBtn">🗑️ Clear All</button>
@@ -187,6 +193,7 @@ const state = {
   slides: [],
   crop: { x: 0, y: 0, w: 0, h: 0 },
   pipWindow: null,
+  exportScale: 0.70, // default Medium
 };
 
 const $ = (id) => document.getElementById(id);
@@ -223,11 +230,11 @@ function toast(msg, ms = 1800) {
 }
 
 // ════════════════════════════════════════════════════════════
-// RATIO
+// RATIO SELECTION
 // ════════════════════════════════════════════════════════════
-document.querySelectorAll('.ratio-btn').forEach(btn => {
+document.querySelectorAll('.ratio-btn[data-w]').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.ratio-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.ratio-btn[data-w]').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     const w = parseFloat(btn.dataset.w);
     const h = parseFloat(btn.dataset.h);
@@ -237,6 +244,18 @@ document.querySelectorAll('.ratio-btn').forEach(btn => {
       els.ratioLabel.textContent = state.ratio.free ? 'Full' : `${w}:${h}`;
     }
     toast(`📐 ${state.ratio.free ? 'Full Window' : w + ':' + h}`);
+  });
+});
+
+// ════════════════════════════════════════════════════════════
+// EXPORT SIZE SELECTION
+// ════════════════════════════════════════════════════════════
+document.querySelectorAll('.size-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.exportScale = parseFloat(btn.dataset.scale);
+    toast(`📐 PPT Image: ${(state.exportScale * 100).toFixed(0)}%`);
   });
 });
 
@@ -570,60 +589,58 @@ els.clearBtn.addEventListener('click', () => {
   }
 });
 
+// ════════════════════════════════════════════════════════════
+// EXPORT TO POWERPOINT (Centered + Sized)
+// ════════════════════════════════════════════════════════════
 els.exportBtn.addEventListener('click', async () => {
-if (state.slides.length === 0) return;
-toast('⏳ Exporting...');
+  if (state.slides.length === 0) return;
+  toast('⏳ Exporting...');
 
-const pptx = new PptxGenJS();
+  const pptx = new PptxGenJS();
+  pptx.layout = 'LAYOUT_WIDE'; // 13.333 x 7.5 inches
+  const SLIDE_W = 13.333;
+  const SLIDE_H = 7.5;
 
-// ใช้ 16:9 standard layout
-pptx.layout = 'LAYOUT_WIDE'; // 13.333 x 7.5 inches
-const SLIDE_W = 13.333;
-const SLIDE_H = 7.5;
+  const IMAGE_SCALE = state.exportScale;
+  const maxW = SLIDE_W * IMAGE_SCALE;
+  const maxH = SLIDE_H * IMAGE_SCALE;
 
-// ─── ตั้งค่าขนาดภาพ ───
-const IMAGE_SCALE = 0.70;  // 70% ของ slide (medium)
-const maxW = SLIDE_W * IMAGE_SCALE;
-const maxH = SLIDE_H * IMAGE_SCALE;
+  state.slides.forEach((s, i) => {
+    const slide = pptx.addSlide();
+    slide.background = { color: 'FFFFFF' };
 
-state.slides.forEach((s, i) => {
-  const slide = pptx.addSlide();
+    // คำนวณขนาดรักษา aspect ratio
+    const imgRatio = s.width / s.height;
+    let w = maxW;
+    let h = maxW / imgRatio;
+    if (h > maxH) {
+      h = maxH;
+      w = maxH * imgRatio;
+    }
 
-  // 🎨 พื้นหลังขาว ดูสะอาด
-  slide.background = { color: 'FFFFFF' };
+    // จัดกึ่งกลาง slide
+    const x = (SLIDE_W - w) / 2;
+    const y = (SLIDE_H - h) / 2;
 
-  // 📐 คำนวณขนาดภาพ (รักษา aspect ratio)
-  const imgRatio = s.width / s.height;
-  let w = maxW;
-  let h = maxW / imgRatio;
-  if (h > maxH) {
-    h = maxH;
-    w = maxH * imgRatio;
-  }
+    slide.addImage({
+      data: s.dataUrl,
+      x: x, y: y, w: w, h: h,
+    });
 
-  // 🎯 จัดกึ่งกลาง slide
-  const x = (SLIDE_W - w) / 2;
-  const y = (SLIDE_H - h) / 2;
-
-  // 🖼️ ใส่ภาพ
-  slide.addImage({
-    data: s.dataUrl,
-    x: x, y: y, w: w, h: h,
+    // เลขหน้ามุมล่างขวา
+    slide.addText(`${i + 1} / ${state.slides.length}`, {
+      x: SLIDE_W - 1.2, y: SLIDE_H - 0.4,
+      w: 1, h: 0.3,
+      fontSize: 10, color: '999999',
+      align: 'right',
+    });
   });
 
-  // (Optional) เพิ่มเลข slide มุมล่างขวา
-  slide.addText(`${i + 1} / ${state.slides.length}`, {
-    x: SLIDE_W - 1.2, y: SLIDE_H - 0.4,
-    w: 1, h: 0.3,
-    fontSize: 10, color: '999999',
-    align: 'right',
+  await pptx.writeFile({
+    fileName: `Snipper_${new Date().toISOString().slice(0,10)}_${Date.now()}.pptx`
   });
+  toast(`✅ Exported ${state.slides.length} slides!`, 3000);
 });
-
-await pptx.writeFile({
-  fileName: `Snipper_${new Date().toISOString().slice(0,10)}_${Date.now()}.pptx`
-});
-toast(`✅ Exported ${state.slides.length} slides!`, 3000);
-});
+</script>
 
 </body></html>
